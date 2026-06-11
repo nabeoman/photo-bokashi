@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#16181d">
+<title>ぼかしモザイク</title>
+<style>
+  :root {
+    --bg: #16181d;
+    --panel: #1f2229;
+    --panel-2: #272b34;
+    --line: #343945;
+    --text: #e8eaee;
+    --text-dim: #9aa1ad;
+    --blur-c: #5b9cf5;
+    --mosaic-c: #f5a55b;
+    --eraser-c: #8d97a8;
+    --radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100dvh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: .04em; }
+  header h1 span { color: var(--text-dim); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .hbtns { display: flex; gap: 8px; }
+  .hbtn {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 12px;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .hbtn:disabled { opacity: .35; }
+  .hbtn.primary { background: var(--blur-c); border-color: var(--blur-c); color: #fff; font-weight: 600; }
+
+  /* ---- canvas area ---- */
+  main {
+    flex: 1 1 auto;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 10px;
+    background:
+      repeating-conic-gradient(#1b1e24 0% 25%, #14161b 0% 50%) 0 0 / 22px 22px;
+  }
+  #canvas {
+    max-width: 100%;
+    max-height: 100%;
+    touch-action: none;
+    border-radius: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.5);
+    display: none;
+    cursor: crosshair;
+  }
+  #dropzone {
+    border: 2px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 44px 28px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.9;
+    background: rgba(22,24,29,.85);
+    cursor: pointer;
+    max-width: 340px;
+  }
+  #dropzone strong { color: var(--text); font-size: 16px; display: block; margin-bottom: 6px; }
+  #dropzone .pick {
+    display: inline-block;
+    margin-top: 14px;
+    background: var(--blur-c);
+    color: #fff;
+    font-weight: 600;
+    padding: 11px 26px;
+    border-radius: 11px;
+    font-size: 15px;
+  }
+  #zoomReset {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    background: rgba(31,34,41,.92);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 9px 16px;
+    border-radius: 999px;
+    display: none;
+    cursor: pointer;
+    z-index: 40;
+    box-shadow: 0 2px 10px rgba(0,0,0,.4);
+  }
+  /* brush preview ring */
+  #ring {
+    position: fixed;
+    border: 1.5px solid rgba(255,255,255,.9);
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    display: none;
+    mix-blend-mode: difference;
+    z-index: 50;
+  }
+
+  /* ---- bottom controls ---- */
+  footer {
+    flex: 0 0 auto;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modes { display: flex; gap: 8px; }
+  .mode {
+    flex: 1;
+    padding: 11px 0;
+    border-radius: 11px;
+    border: 1.5px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .12s;
+  }
+  .mode[data-mode="blur"].active   { border-color: var(--blur-c);   color: var(--blur-c);   background: rgba(91,156,245,.12); }
+  .mode[data-mode="mosaic"].active { border-color: var(--mosaic-c); color: var(--mosaic-c); background: rgba(245,165,91,.12); }
+  .mode[data-mode="eraser"].active { border-color: var(--eraser-c); color: var(--text);     background: rgba(141,151,168,.15); }
+
+  .sliders { display: flex; gap: 16px; }
+  .slider { flex: 1; }
+  .slider label {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--text-dim); margin-bottom: 5px;
+  }
+  .slider label b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  input[type=range] {
+    width: 100%;
+    appearance: none; -webkit-appearance: none;
+    height: 4px; border-radius: 2px;
+    background: var(--line);
+    outline: none;
+  }
+  input[type=range]:disabled { opacity: .3; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--text);
+    border: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,.4);
+  }
+  #toast {
+    position: fixed;
+    left: 50%; top: 16px;
+    transform: translateX(-50%);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 13px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    opacity: 0;
+    transition: opacity .25s;
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ぼかしモザイク<span>なぞった所だけ加工</span></h1>
+  <div class="hbtns">
+    <button class="hbtn" id="undoBtn" disabled>戻す</button>
+    <button class="hbtn" id="newBtn">別の写真</button>
+    <button class="hbtn primary" id="saveBtn" disabled>保存</button>
+  </div>
+</header>
+
+<main id="stage">
+  <div id="dropzone">
+    <strong>写真を選択</strong>
+    顔や個人情報など、隠したい部分を<br>指でなぞるだけで加工できます。<br>画像は端末の外に送信されません。
+    <div class="pick">写真を選ぶ / 撮影する</div>
+  </div>
+  <canvas id="canvas"></canvas>
+  <button id="zoomReset">100%</button>
+</main>
+
+<footer>
+  <div class="modes">
+    <button class="mode active" data-mode="blur">ぼかし</button>
+    <button class="mode" data-mode="mosaic">モザイク</button>
+    <button class="mode" data-mode="eraser">消しゴム</button>
+  </div>
+  <div class="sliders">
+    <div class="slider">
+      <label>ブラシの太さ <b id="sizeVal">40</b></label>
+      <input type="range" id="sizeRange" min="10" max="150" value="40">
+    </div>
+    <div class="slider">
+      <label><span id="strName">強さ（ぼかし）</span> <b id="strVal">5</b></label>
+      <input type="range" id="strRange" min="1" max="10" value="5">
+    </div>
+  </div>
+</footer>
+
+<div id="ring"></div>
+<div id="toast"></div>
+<input type="file" id="fileInput" accept="image/*">
+
+<script>
+(function () {
+  const MAX_DIM = 2048;          // 処理を軽くするための最大辺
+  const UNDO_LIMIT = 20;
+
+  const canvas   = document.getElementById('canvas');
+  const ctx      = canvas.getContext('2d');
+  const dropzone = document.getElementById('dropzone');
+  const fileInput= document.getElementById('fileInput');
+  const ring     = document.getElementById('ring');
+  const toast    = document.getElementById('toast');
+  const undoBtn  = document.getElementById('undoBtn');
+  const saveBtn  = document.getElementById('saveBtn');
+  const newBtn   = document.getElementById('newBtn');
+  const sizeRange= document.getElementById('sizeRange');
+  const strRange = document.getElementById('strRange');
+  const sizeVal  = document.getElementById('sizeVal');
+  const strVal   = document.getElementById('strVal');
+
+  let img = null;              // 元画像 (canvas)
+  let blurLayer = null;        // 全体ぼかし版
+  let mosaicLayer = null;      // 全体モザイク版
+  let blurMask, blurMaskCtx;   // ぼかしマスク
+  let mosaicMask, mosaicMaskCtx;
+  let tmp, tmpCtx;             // 合成用
+  let mode = 'blur';
+  let drawing = false;
+  let last = null;
+  let undoStack = [];
+
+  const supportsFilter = (() => {
+    // 非対応ブラウザでは ctx.filter が undefined(代入しても無視される)
+    const c = document.createElement('canvas').getContext('2d');
+    return typeof c.filter === 'string';
+  })();
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  function makeCanvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    return c;
+  }
+
+  /* ---------- エフェクト層の生成 ---------- */
+  function buildBlurLayer(strength) {
+    const w = canvas.width, h = canvas.height;
+    const radius = Math.max(2, Math.round(Math.min(w, h) * 0.004 * strength));
+    const out = makeCanvas(w, h);
+    const octx = out.getContext('2d');
+    if (supportsFilter) {
+      octx.filter = `blur(${radius}px)`;
+      octx.drawImage(img, 0, 0);
+      octx.filter = 'none';
+    } else {
+      // フォールバック: 段階的な縮小→拡大で近似ぼかし(iOS Safari等)
+      let cur = img, cw = w, ch = h;
+      const targetW = Math.max(1, Math.round(w / Math.max(2, radius * 0.8)));
+      while (cw / 2 > targetW) {
+        const half = makeCanvas(Math.max(1, Math.ceil(cw / 2)), Math.max(1, Math.ceil(ch / 2)));
+        const hctx = half.getContext('2d');
+        hctx.imageSmoothingEnabled = true;
+        hctx.drawImage(cur, 0, 0, cw, ch, 0, 0, half.width, half.height);
+        cur = half; cw = half.width; ch = half.height;
+      }
+      octx.imageSmoothingEnabled = true;
+      octx.imageSmoothingQuality = 'high';
+      octx.drawImage(cur, 0, 0, cw, ch, 0, 0, w, h);
+    }
+    return out;
+  }
+
+  function buildMosaicLayer(strength) {
+    const w = canvas.width, h = canvas.height;
+    const block = Math.max(4, Math.round(Math.min(w, h) * 0.006 * strength));
+    const small = makeCanvas(Math.max(1, Math.ceil(w / block)), Math.max(1, Math.ceil(h / block)));
+    const sctx = small.getContext('2d');
+    sctx.imageSmoothingEnabled = true;
+    sctx.drawImage(img, 0, 0, small.width, small.height);
+    const out = makeCanvas(w, h);
+    const octx = out.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(small, 0, 0, w, h);
+    return out;
+  }
+
+  // ぼかしとモザイクで個別の強さを保持
+  const strength = { blur: 5, mosaic: 5 };
+
+  function rebuildLayers() {
+    if (!img) return;
+    blurLayer = buildBlurLayer(strength.blur);
+    mosaicLayer = buildMosaicLayer(strength.mosaic);
+  }
+
+  /* ---------- 合成描画 ---------- */
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    compositeEffect(blurLayer, blurMask);
+    compositeEffect(mosaicLayer, mosaicMask);
+  }
+
+  function compositeEffect(layer, mask) {
+    tmpCtx.clearRect(0, 0, tmp.width, tmp.height);
+    tmpCtx.drawImage(layer, 0, 0);
+    tmpCtx.globalCompositeOperation = 'destination-in';
+    tmpCtx.drawImage(mask, 0, 0);
+    tmpCtx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(tmp, 0, 0);
+  }
+
+  /* ---------- 画像読み込み ---------- */
+  function loadFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = image.naturalWidth, h = image.naturalHeight;
+      const scale = Math.min(1, MAX_DIM / Math.max(w, h));
+      w = Math.round(w * scale); h = Math.round(h * scale);
+
+      canvas.width = w; canvas.height = h;
+      img = makeCanvas(w, h);
+      img.getContext('2d').drawImage(image, 0, 0, w, h);
+
+      blurMask = makeCanvas(w, h);   blurMaskCtx = blurMask.getContext('2d');
+      mosaicMask = makeCanvas(w, h); mosaicMaskCtx = mosaicMask.getContext('2d');
+      tmp = makeCanvas(w, h);        tmpCtx = tmp.getContext('2d');
+
+      undoStack = [];
+      undoBtn.disabled = true;
+      saveBtn.disabled = false;
+      resetView();
+      rebuildLayers();
+      render();
+      dropzone.style.display = 'none';
+      canvas.style.display = 'block';
+      showToast('隠したい部分を指でなぞってください');
+    };
+    image.onerror = () => showToast('画像を読み込めませんでした');
+    image.src = url;
+  }
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  newBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+
+  /* ---------- 描画(タッチ/マウス) ---------- */
+  function canvasPos(e) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * (canvas.width / r.width),
+      y: (e.clientY - r.top) * (canvas.height / r.height)
+    };
+  }
+
+  function brushRadius() {
+    // 表示サイズ基準の太さを実ピクセルに変換
+    const r = canvas.getBoundingClientRect();
+    return (+sizeRange.value / 2) * (canvas.width / r.width);
+  }
+
+  function strokeOn(maskCtx, from, to, erase) {
+    maskCtx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+    maskCtx.strokeStyle = '#fff';
+    maskCtx.fillStyle = '#fff';
+    maskCtx.lineCap = 'round';
+    maskCtx.lineJoin = 'round';
+    maskCtx.lineWidth = brushRadius() * 2;
+    maskCtx.beginPath();
+    maskCtx.moveTo(from.x, from.y);
+    maskCtx.lineTo(to.x, to.y);
+    maskCtx.stroke();
+  }
+
+  function pushUndo() {
+    undoStack.push({
+      blur: blurMaskCtx.getImageData(0, 0, canvas.width, canvas.height),
+      mosaic: mosaicMaskCtx.getImageData(0, 0, canvas.width, canvas.height)
+    });
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    undoBtn.disabled = false;
+  }
+
+  /* ---------- 描画 & ピンチズーム ---------- */
+  const zoomReset = document.getElementById('zoomReset');
+  const pointers = new Map();          // 画面上のアクティブな指
+  let view = { zoom: 1, tx: 0, ty: 0 };
+  let pinch = null;                    // ピンチ開始時の状態
+  let strokeStarted = false;
+
+  function applyView() {
+    canvas.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.zoom})`;
+    zoomReset.style.display = view.zoom > 1.01 ? 'block' : 'none';
+    zoomReset.textContent = Math.round(view.zoom * 100) + '%';
+  }
+
+  function resetView() {
+    view = { zoom: 1, tx: 0, ty: 0 };
+    applyView();
+  }
+  zoomReset.addEventListener('click', resetView);
+
+  function midDist() {
+    const pts = [...pointers.values()];
+    return {
+      mid: { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 },
+      dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1
+    };
+  }
+
+  canvas.addEventListener('pointerdown', e => {
+    if (!img) return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size === 2) {
+      // 2本目の指が触れたら、描きかけの線を取り消してピンチモードへ
+      if (strokeStarted) {
+        const s = undoStack.pop();
+        if (s) {
+          blurMaskCtx.putImageData(s.blur, 0, 0);
+          mosaicMaskCtx.putImageData(s.mosaic, 0, 0);
+          render();
+          if (!undoStack.length) undoBtn.disabled = true;
+        }
+        strokeStarted = false;
+      }
+      drawing = false;
+      last = null;
+      const { mid, dist } = midDist();
+      pinch = { mid, dist, zoom: view.zoom, tx: view.tx, ty: view.ty };
+      return;
+    }
+    if (pointers.size > 2 || pinch) return;
+
+    pushUndo();
+    strokeStarted = true;
+    drawing = true;
+    last = canvasPos(e);
+    applyStroke(last, last);
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    moveRing(e);
+    if (!img) return;
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    // ピンチズーム & 2本指パン
+    if (pinch && pointers.size === 2) {
+      e.preventDefault();
+      const { mid, dist } = midDist();
+      let z = Math.min(8, Math.max(1, pinch.zoom * dist / pinch.dist));
+      // 現在の表示中心からレイアウト上の中心を逆算し、指の中点を基準に拡縮
+      const r = canvas.getBoundingClientRect();
+      const C = {
+        x: r.left + r.width / 2 - view.tx,
+        y: r.top + r.height / 2 - view.ty
+      };
+      const u = {
+        x: (pinch.mid.x - C.x - pinch.tx) / pinch.zoom,
+        y: (pinch.mid.y - C.y - pinch.ty) / pinch.zoom
+      };
+      view.zoom = z;
+      view.tx = mid.x - C.x - u.x * z;
+      view.ty = mid.y - C.y - u.y * z;
+      if (z <= 1.01) view = { zoom: 1, tx: 0, ty: 0 };
+      applyView();
+      return;
+    }
+
+    if (!drawing) return;
+    e.preventDefault();
+    const p = canvasPos(e);
+    applyStroke(last, p);
+    last = p;
+  });
+
+  function applyStroke(from, to) {
+    if (mode === 'blur') {
+      strokeOn(blurMaskCtx, from, to, false);
+      strokeOn(mosaicMaskCtx, from, to, true); // 重複を避け上書き
+    } else if (mode === 'mosaic') {
+      strokeOn(mosaicMaskCtx, from, to, false);
+      strokeOn(blurMaskCtx, from, to, true);
+    } else {
+      strokeOn(blurMaskCtx, from, to, true);
+      strokeOn(mosaicMaskCtx, from, to, true);
+    }
+    render();
+  }
+
+  ['pointerup', 'pointercancel'].forEach(ev =>
+    canvas.addEventListener(ev, e => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinch = null;
+      drawing = false;
+      strokeStarted = false;
+      last = null;
+    })
+  );
+
+  // Safari独自のジェスチャでページ全体が拡大されるのを防ぐ
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
+    document.addEventListener(ev, e => e.preventDefault())
+  );
+
+  /* ブラシのリング表示 */
+  function moveRing(e) {
+    if (!img) return;
+    const d = +sizeRange.value;
+    ring.style.width = d + 'px';
+    ring.style.height = d + 'px';
+    ring.style.left = e.clientX + 'px';
+    ring.style.top = e.clientY + 'px';
+    ring.style.display = e.pointerType === 'mouse' ? 'block' : 'none';
+  }
+  canvas.addEventListener('pointerleave', () => ring.style.display = 'none');
+
+  /* ---------- コントロール ---------- */
+  const strName = document.getElementById('strName');
+
+  function syncStrengthUI() {
+    if (mode === 'eraser') {
+      strRange.disabled = true;
+      strName.textContent = '強さ（消しゴムは無関係）';
+    } else {
+      strRange.disabled = false;
+      strRange.value = strength[mode];
+      strVal.textContent = strength[mode];
+      strName.textContent = mode === 'blur' ? '強さ（ぼかし）' : '強さ（モザイク）';
+    }
+  }
+
+  document.querySelectorAll('.mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+      syncStrengthUI();
+    });
+  });
+
+  sizeRange.addEventListener('input', () => sizeVal.textContent = sizeRange.value);
+  strRange.addEventListener('input', () => strVal.textContent = strRange.value);
+  strRange.addEventListener('change', () => {
+    if (mode === 'eraser') return;
+    strength[mode] = +strRange.value;
+    if (!img) return;
+    // 変更したモードのレイヤーだけ作り直す(もう一方は影響を受けない)
+    if (mode === 'blur') blurLayer = buildBlurLayer(strength.blur);
+    else mosaicLayer = buildMosaicLayer(strength.mosaic);
+    render();
+  });
+
+  undoBtn.addEventListener('click', () => {
+    const s = undoStack.pop();
+    if (!s) return;
+    blurMaskCtx.putImageData(s.blur, 0, 0);
+    mosaicMaskCtx.putImageData(s.mosaic, 0, 0);
+    render();
+    if (!undoStack.length) undoBtn.disabled = true;
+  });
+
+  function makeFileName() {
+    const t = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `bokashi_${t.getFullYear()}${pad(t.getMonth()+1)}${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}.png`;
+  }
+
+  function downloadBlob(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    showToast('ダウンロードしました');
+  }
+
+  saveBtn.addEventListener('click', () => {
+    canvas.toBlob(async blob => {
+      if (!blob) { showToast('保存に失敗しました'); return; }
+      const name = makeFileName();
+      const file = new File([blob], name, { type: 'image/png' });
+
+      // スマホ: 共有シートを開く(「画像を保存」で写真アプリへ)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          showToast('「画像を保存」で写真アプリに保存できます');
+          return;
+        } catch (err) {
+          // キャンセル時は何もしない / 共有失敗時はダウンロードへ
+          if (err && err.name === 'AbortError') return;
+        }
+      }
+      // PCや非対応ブラウザ: 通常ダウンロード
+      downloadBlob(blob, name);
+    }, 'image/png');
+  });
+
+  /* ドラッグ&ドロップ(PC用) */
+  const stage = document.getElementById('stage');
+  stage.addEventListener('dragover', e => e.preventDefault());
+  stage.addEventListener('drop', e => {
+    e.preventDefault();
+    loadFile(e.dataTransfer.files[0]);
+  });
+})();
+</script>
+</body>
+</html>
