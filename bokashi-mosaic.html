@@ -4,26 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#090b10">
+<meta name="theme-color" content="#171d30">
 <title>ぼかしモザイク</title>
 <style>
   :root {
-    --bg: #090b10;
-    --panel: #0d1018;
-    --panel-2: #141828;
-    --line: #1e2436;
-    --text: #e4e7ef;
-    --text-dim: #6b7490;
+    --bg: #171d30;
+    --panel: #1f2740;
+    --panel-2: #273050;
+    --line: #36405e;
+    --text: #eceff8;
+    --text-dim: #8a96b8;
     --blur-c: #818cf8;
     --mosaic-c: #fb7185;
-    --eraser-c: #64748b;
+    --eraser-c: #7888a8;
     --radius: 14px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
   body {
     background: var(--bg);
-    background-image: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(129,140,248,.12) 0%, transparent 70%);
+    background-image: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(129,140,248,.22) 0%, transparent 70%);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
     display: flex;
@@ -41,7 +41,7 @@
     padding: 10px 14px;
     border-bottom: 1px solid rgba(255,255,255,.06);
     flex: 0 0 auto;
-    background: rgba(9,11,16,.75);
+    background: rgba(23,29,48,.80);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
   }
@@ -154,7 +154,7 @@
   /* ---- bottom controls ---- */
   footer {
     flex: 0 0 auto;
-    background: rgba(13,16,24,.85);
+    background: rgba(23,29,48,.88);
     border-top: 1px solid rgba(255,255,255,.06);
     padding: 12px 14px calc(24px + env(safe-area-inset-bottom));
     display: flex;
@@ -261,7 +261,7 @@
 
 <header>
   <h1>ぼかしモザイク<span>なぞった所だけ加工</span></h1>
-  <div id="credit">v1.3.4 &nbsp;©&nbsp;<a href="https://x.com/nabeoni" target="_blank">@nabeoni</a>&nbsp;/ Created by nabeoni &amp; Claude AI</div>
+  <div id="credit">v1.3.5 &nbsp;©&nbsp;<a href="https://x.com/nabeoni" target="_blank">@nabeoni</a>&nbsp;/ Created by nabeoni &amp; Claude AI</div>
   <div class="hbtns">
     <button class="hbtn" id="undoBtn" disabled>戻す</button>
     <button class="hbtn" id="newBtn">別の写真</button>
